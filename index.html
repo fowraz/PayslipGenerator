@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Payslip Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        /* Base and App Container CSS */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #e4e7f1 100%); padding: 20px; color: #333; min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .app-container { max-width: 800px; margin: 0 auto 20px auto; padding: 25px; background: white; border-radius: 10px; box-shadow: 0 6px 25px rgba(0, 0, 0, 0.1); border: 1px solid #ddd; }
+        .app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .app-title { display: flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 700; color: #ED1C24; }
+        .app-title i { font-size: 28px; }
+        .app-actions { display: flex; gap: 10px; }
+        .app-action-btn { border: none; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.3s ease; box-shadow: 0 3px 10px rgba(0,0,0,0.08); }
+        .app-action-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.12); }
+        .app-action-btn .fa-spin { animation: fa-spin 1s infinite linear; }
+        .btn-zip { background-color: #007bff; color: white; }
+        .btn-zip:hover { background-color: #0056b3; }
+        .app-divider { border: none; height: 1.5px; background-color: #ED1C24; margin-bottom: 20px; }
+        .uploader-prompt { margin-bottom: 15px; font-size: 14px; color: #555; text-align: center;}
+        #excel-file-input { border: 2px dashed #ED1C24; padding: 20px; border-radius: 8px; width: 100%; cursor: pointer; }
+        #excel-file-input::file-selector-button { background: #ED1C24; color: white; border: none; padding: 9px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        #excel-file-input::file-selector-button:hover { background: #c5161d; }
+        
+        /* NEW: Styles for Payroll Period Selector */
+        .payroll-period-container { margin-top: 20px; display: flex; justify-content: center; align-items: center; gap: 15px; padding: 15px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
+        .period-input-group { display: flex; align-items: center; gap: 8px; }
+        .period-input-group label { font-weight: 600; font-size: 14px; }
+        .period-input-group select { padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; background: white; }
+
+        .range-download-container { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; display: flex; align-items: center; justify-content: center; gap: 15px; }
+        .range-input-group { display: flex; align-items: center; gap: 8px; }
+        .range-input-group label { font-weight: 600; font-size: 14px; }
+        .range-input-group input { width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; }
+        .btn-range-download { background-color: #fd7e14; color: white; }
+        .btn-range-download:hover { background-color: #e86a00; }
+        .actions-container { max-width: 800px; margin: 0 auto 15px auto; text-align: right; display: flex; justify-content: flex-end; gap: 12px; }
+        .action-button { background: #ED1C24; color: white; border: none; padding: 9px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.3s ease; box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
+        .action-button:hover { background: #c5161d; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.15); }
+        .action-button:disabled { background-color: #cccccc; cursor: not-allowed; transform: none; box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
+        
+        /* Payslip Styles (unchanged from previous version) */
+        .payslip-container { max-width: 800px; width: 100%; background: white; box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden; margin: 0 auto 20px auto; border: 1px solid #ddd; position: relative; }
+        .header { padding: 8px 20px; background: #ED1C24; color: white; display: flex; align-items: center; justify-content: space-between; }
+        .header-title h1 { font-size: 15px; }
+        .header-logo { max-height: 26px; }
+        .employee-details { padding: 8px 20px; background: #fafafa; border-bottom: 1px solid #eee; }
+        .detail-grid { gap: 2px 15px; font-size: 10.5px; display: grid; grid-template-columns: 1fr 1fr; }
+        .detail-item { display: flex; align-items: center; }
+        .detail-label { font-weight: 600; color: #111; min-width: 110px; padding-right: 8px; }
+        .detail-value { font-weight: 700; color: #111; }
+        .section-title { font-size: 11.5px; padding: 5px 20px; background: #f3f3f3; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #ED1C24;}
+        .section-title i { font-size: 12px; margin-right: 10px; }
+        .table-section { padding: 5px 20px; }
+        .data-table { font-size: 9.5px; width: 100%; border-collapse: collapse; }
+        .data-table td { padding: 2px 4px; vertical-align: middle; border: 1px solid #eee; }
+        .data-table td:nth-child(odd) { font-weight: 600; color: #111; background: #fdfdfd; width: 15%;}
+        .data-table td:nth-child(even) { text-align: right; font-weight: 700; color: #111; width: 18.33%;}
+        .data-table thead th { padding: 3px; background: #f7f7f7; text-align: center; font-weight: 700; border: 1px solid #eee; color: #111;}
+        .main-body-section { padding: 5px 20px; }
+        .main-grid { gap: 15px; display: grid; grid-template-columns: 1fr 1fr; }
+        .content-card { padding: 6px; border: 1px solid #eaeaea; border-radius: 6px; }
+        .card-title { font-size: 11px; padding-bottom: 3px; margin-bottom: 4px; font-weight: 700; color: #ED1C24; border-bottom: 1px solid #f0f0f0; }
+        .card-subtitle { font-size: 9.5px; margin-top: 5px; margin-bottom: 3px; padding: 3px; font-weight: 700; color: #111; background: #fafafa; border-radius: 3px; }
+        .data-item { padding: 2px 3px; font-size: 9.5px; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #f5f5f5; }
+        .item-label { color: #111; flex-basis: 70%; }
+        .index { font-weight: 600; color: #ED1C24; margin-right: 6px; display: inline-block; width: 20px; }
+        .item-amount { font-weight: 700; color: #111; text-align: right; flex-basis: 30%; }
+        .total-row { font-size: 10.5px; margin-top: 6px; padding: 5px; display: flex; justify-content: space-between; font-weight: 700; background: #f1f8e9; color: #111; border-top: 2px solid #c8e6c9; border-radius: 0 0 4px 4px;}
+        .total-row[style*="ffebee"] { color: #111; }
+        .net-income-section { padding: 8px 20px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; background: #ED1C24; color: white; }
+        .net-income-label { font-size: 13px; font-weight: 700; }
+        .net-income-amount { font-size: 17px; font-weight: 800; }
+        .disclaimer { padding: 8px 20px; font-size: 7.5px; background: #fafafa; color: #444;}
+        .disclaimer-title { font-size: 9.5px; margin-bottom: 3px; color: #111; }
+        .disclaimer-content ul { padding-left: 15px; }
+        .disclaimer-content li { margin-bottom: 1px; }
+        .footer { padding: 5px 20px; font-size: 8.5px; background: #000; text-align: center; color: #fff; border-top: none; }
+        
+        /* Processing List Styles */
+        #processing-container { max-width: 800px; margin: 0 auto 25px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 6px 25px rgba(0, 0, 0, 0.1); border: 1px solid #ddd; }
+        #processing-container h2 { margin-bottom: 10px; color: #333; text-align: center; font-size: 20px; }
+        .processing-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .processing-table th, .processing-table td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; vertical-align: middle; }
+        .processing-table th { background-color: #f2f2f2; font-weight: 600; }
+        .processing-table .status-cell { font-weight: bold; }
+        .processing-table .status-pending { color: #ffc107; }
+        .processing-table .status-generating { color: #007bff; }
+        .processing-table .status-done { color: #28a745; }
+        .processing-table .status-error { color: #dc3545; }
+        .btn-process-download { background-color: #28a745; color: white; border: none; padding: 5px 12px; font-size: 12px; border-radius: 5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background-color 0.2s ease; }
+        .btn-process-download:hover { background-color: #218838; }
+        #pdf-clone-container { position: absolute; top: 0; left: 0; z-index: -1; opacity: 0; width: 800px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="app-container">
+            <div class="app-header">
+                <div class="app-title"><i class="fas fa-file-invoice-dollar"></i><h2>Payslip Generator</h2></div>
+                <div class="app-actions" id="global-actions-container">
+                    <button id="download-all-zip-btn" class="app-action-btn btn-zip"><i class="fas fa-file-archive"></i> Download All (ZIP)</button>
+                </div>
+            </div>
+            <hr class="app-divider">
+            <p class="uploader-prompt">Select your Excel file (.xlsx) to begin.</p>
+            <input type="file" id="excel-file-input" accept=".xlsx, .xls">
+            
+            <!-- NEW: Payroll Period Selector -->
+            <div class="payroll-period-container">
+                <div class="period-input-group">
+                    <label for="month-select">Payroll Month:</label>
+                    <select id="month-select">
+                        <option value="0">January</option>
+                        <option value="1">February</option>
+                        <option value="2">March</option>
+                        <option value="3">April</option>
+                        <option value="4">May</option>
+                        <option value="5">June</option>
+                        <option value="6">July</option>
+                        <option value="7">August</option>
+                        <option value="8">September</option>
+                        <option value="9">October</option>
+                        <option value="10">November</option>
+                        <option value="11">December</option>
+                    </select>
+                </div>
+                <div class="period-input-group">
+                    <label for="year-select">Payroll Year:</label>
+                    <select id="year-select"></select>
+                </div>
+            </div>
+
+            <div class="range-download-container" id="range-download-section" style="display: none;">
+                <div class="range-input-group"><label for="range-from">From:</label><input type="number" id="range-from" min="1" placeholder="e.g., 1"></div>
+                <div class="range-input-group"><label for="range-to">To:</label><input type="number" id="range-to" min="1" placeholder="e.g., 10"></div>
+                <button id="download-range-btn" class="app-action-btn btn-range-download"><i class="fas fa-download"></i> Download Range</button>
+            </div>
+        </div>
+        
+        <div id="processing-container" style="display: none;">
+            <h2><i class="fas fa-tasks"></i> Download Processing Status</h2>
+            <table class="processing-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Employee Name</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="processing-list-body"></tbody>
+            </table>
+        </div>
+
+        <div id="payslips-output-container"></div>
+    </div>
+    <div id="pdf-clone-container"></div>
+    <template id="payslip-template">
+        <div class="payslip-wrapper">
+            <div class="actions-container">
+                <button class="action-button pdf-btn"><i class="fas fa-file-pdf"></i> Download PDF</button>
+            </div>
+            <div class="payslip-container">
+                <div class="header">
+                    <!-- UPDATED: Dynamic header title -->
+                    <div class="header-title"><h1 class="data-payslip-period"></h1></div>
+                    <img class="header-logo" src="https://i.ibb.co/HDDMbdKg/Wurth-Gulf-CMYK-PNG-01.png" alt="Wurth Gulf Logo">
+                </div>
+                <!-- Rest of the template is unchanged -->
+                <div class="employee-details"><div class="detail-grid"><div class="detail-item"><div class="detail-label">Employee Name:</div><div class="detail-value data-employee-name"></div></div><div class="detail-item"><div class="detail-label">Designation:</div><div class="detail-value data-designation"></div></div><div class="detail-item"><div class="detail-label">Department:</div><div class="detail-value data-department"></div></div><div class="detail-item"><div class="detail-label">Working days:</div><div class="detail-value data-working-days"></div></div></div></div><div class="section-title"><i class="fas fa-chart-line"></i> Individual Performance</div><div class="table-section"><table class="data-table"><tbody><tr><td>Sales Target</td><td class="data-sales-target"></td><td>Actual Sales</td><td class="data-actual-sales"></td><td>Sales TF</td><td class="data-sales-tf"></td></tr><tr><td>Collection Target&lt;=360</td><td class="data-collection-target-360"></td><td>Actual Collection&lt;=360</td><td class="data-actual-collection-360"></td><td>Collection TF %</td><td class="data-collection-tf-perc"></td></tr><tr><td>Cash On Delivery</td><td class="data-cod">0.00</td><td>Total Actual Collection</td><td class="data-total-actual-collection"></td><td>Total Collection TF %</td><td class="data-total-collection-tf-perc"></td></tr><tr><td>Total Collection Target</td><td class="data-total-collection-target"></td><td>T. Collection TF %</td><td class="data-t-collection-tf-perc"></td><td>Number of lines</td><td class="data-number-of-lines"></td></tr><tr><td>Target MBC</td><td class="data-target-mbc"></td><td>Actual MBC</td><td class="data-actual-mbc"></td><td>MBC TF %</td><td class="data-mbc-tf-perc"></td></tr><tr><td>Target CB</td><td class="data-target-cb"></td><td>Actual CB</td><td class="data-actual-cb"></td><td>CB TF %</td><td class="data-cb-tf-perc"></td></tr><tr><td>Target GP</td><td class="data-target-gp"></td><td>Actual GP</td><td class="data-actual-gp"></td><td>Credit Note</td><td class="data-credit-note"></td></tr></tbody></table></div><div class="section-title"><i class="fas fa-calculator"></i> Variable Income Calculation / KPI</div><div class="table-section"><table class="data-table"><thead><tr><th>Sales commission</th><th>Sales Bonus</th><th>Customer Mgt. Bonus</th><th>Collection TF Bonus</th><th>No. of Lines Incentive</th><th>Total Monthly Variable</th></tr></thead><tbody><tr><td style="text-align:right" class="data-sales-commission-perc"></td><td style="text-align:right" class="data-sales-bonus"></td><td style="text-align:right" class="data-customer-mgt-bonus"></td><td style="text-align:right" class="data-collection-tf-bonus"></td><td style="text-align:right" class="data-lines-incentive"></td><td style="text-align:right" class="data-total-monthly-variable"></td></tr></tbody></table></div><div class="section-title"><i class="fas fa-columns"></i> Earnings & Deductions</div><div class="main-body-section"><div class="main-grid"><div class="content-card"><div class="card-title">Wage in AED</div><div class="card-subtitle">Fixed Wage</div><div class="data-item"><div class="item-label"><span class="index">1.a</span>Basic Salary</div><div class="item-amount data-basic-salary"></div></div><div class="data-item"><div class="item-label"><span class="index">1.b</span>Housing Allowance</div><div class="item-amount data-housing-allowance"></div></div><div class="data-item"><div class="item-label"><span class="index">1.c</span>Transportation Allowance</div><div class="item-amount data-transportation-allowance"></div></div><div class="data-item"><div class="item-label"><span class="index">1.d</span>Other Allowances</div><div class="item-amount data-other-allowance"></div></div><div class="card-subtitle">Variable Wage</div><div class="data-item"><div class="item-label"><span class="index">2.a</span>Total Monthly Variable</div><div class="item-amount data-total-monthly-variable"></div></div><div class="data-item"><div class="item-label"><span class="index">2.c</span>Seniority Bonus</div><div class="item-amount data-seniority-bonus"></div></div><div class="data-item"><div class="item-label"><span class="index">2.d</span>Additional Work Allowance</div><div class="item-amount data-additional-work-allowance"></div></div><div class="data-item"><div class="item-label"><span class="index">2.e,f,g</span>Compensations</div><div class="item-amount data-compensations"></div></div><div class="data-item"><div class="item-label"><span class="index">2.h</span>Variable Income Structure</div><div class="item-amount data-variable-income-structure"></div></div><div class="data-item"><div class="item-label"><span class="index">2.i</span>Special Bonus</div><div class="item-amount data-special-bonus"></div></div><div class="card-subtitle">Off-Cycle Wage</div><div class="data-item"><div class="item-label"><span class="index">3.a</span>Income Adjustment</div><div class="item-amount data-income-adjustment"></div></div><div class="data-item"><div class="item-label"><span class="index">3.b</span>Referral Bonus</div><div class="item-amount data-referral-bonus"></div></div><div class="total-row"><span>Total Wage</span><span class="data-total-wage"></span></div></div><div class="content-card"><div class="card-title">Deductions in AED</div><div class="card-subtitle">Deductions</div><div class="data-item"><div class="item-label"><span class="index">1.a</span>Family Insurance</div><div class="item-amount data-family-insurance"></div></div><div class="data-item"><div class="item-label"><span class="index">1.b</span>Leaves Deductions</div><div class="item-amount data-leaves-deductions"></div></div><div class="data-item"><div class="item-label"><span class="index">2.a</span>Violations (Credit Notes 5%)</div><div class="item-amount data-violation-cn">0.00</div></div><div class="data-item"><div class="item-label"><span class="index">2.a</span>Violations Special Orders (35%)</div><div class="item-amount data-violation-so">0.00</div></div><div class="data-item"><div class="item-label"><span class="index">2.b</span>Violations (Customers/orders)</div><div class="item-amount data-violation-co"></div></div><div class="data-item"><div class="item-label"><span class="index">2.c</span>Violations Petrol Excess</div><div class="item-amount data-violation-petrol"></div></div><div class="data-item"><div class="item-label"><span class="index">2.d,e</span>Violations - Traffic fines / Salik<br>Damages to Vehicle</div><div class="item-amount data-violation-traffic"></div></div><div class="data-item"><div class="item-label"><span class="index">2.f</span>Other Violations</div><div class="item-amount data-other-violations"></div></div><div class="data-item"><div class="item-label"><span class="index">3.a</span>Legal Debts (Personal)</div><div class="item-amount data-legal-debts"></div></div><div class="data-item"><div class="item-label"><span class="index">3.4</span>Other Deduction</div><div class="item-amount data-other-deduction"></div></div><div class="card-subtitle">Redemptions in AED</div><div class="data-item"><div class="item-label"><span class="index">4.a,b</span>Personal loans / Advances</div><div class="item-amount data-personal-loans"></div></div><div class="data-item"><div class="item-label"><span class="index">4.c</span>Etisalat Excess usage</div><div class="item-amount data-etisalat-excess"></div></div><div class="data-item"><div class="item-label"><span class="index">5.a</span>Redemption on Entitlements</div><div class="item-amount data-redemption-entitlements"></div></div><div class="data-item"><div class="item-label"><span class="index">5.c</span>Redemption on commission & bonus</div><div class="item-amount data-redemption-commission"></div></div><div class="data-item"><div class="item-label"><span class="index">5.d</span>Correction on Wage</div><div class="item-amount data-correction-wage">0.00</div></div><div class="total-row" style="color: #333; background: #ffebee; border-color: #ffcdd2;"><span>Total Deductions & Redemptions</span><span class="data-total-deductions"></span></div></div></div></div><div class="net-income-section"><div class="net-income-label">NET INCOME:</div><div class="net-income-amount data-net-income"></div></div><div class="disclaimer"><h3 class="disclaimer-title">Disclaimer</h3><div class="disclaimer-content"><ul><li>This is a system generated document and doesn't require any signature.</li><li>The validity of the document can be verified by corresponding bank transaction.</li><li>The information provided in the payslip is for internal use only. The document is not intended for external use.</li><li>All discrepancies shall be addressed to the HR department within 1 week of payslip receipt.</li><li>This message contains confidential / privileged material intended solely for the individual employee themselves, if you are not the intended recipient of this email then please delete it without copying, distributing or disseminating the contents of the same.</li><li>Do not copy, use or disclose this email or any information contained herein.</li></ul></div></div><div class="footer">&copy; 2025 WURTH. All Rights Reserved.</div></div>
+        </div>
+    </template>
+    
+    <script>
+        let employeeDataStore = [];
+        const monthSelect = document.getElementById('month-select');
+        const yearSelect = document.getElementById('year-select');
+        
+        // --- INITIALIZATION ---
+        // Populate the year dropdown and set the default month/year
+        function initializePeriodSelector() {
+            const currentYear = new Date().getFullYear();
+            const currentMonth = new Date().getMonth();
+            
+            // Populate years (e.g., 5 years past to 5 years future)
+            for (let i = currentYear - 5; i <= currentYear + 5; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                yearSelect.appendChild(option);
+            }
+            
+            // Set default to current month and year
+            monthSelect.value = currentMonth;
+            yearSelect.value = currentYear;
+        }
+        initializePeriodSelector(); // Run on script load
+
+        // PDF generation function (unchanged)
+        async function generatePdfForElement(element, options = {}) {
+            const { outputType = 'save', filename = 'document.pdf' } = options;
+            const cloneContainer = document.getElementById('pdf-clone-container');
+            const clone = element.cloneNode(true);
+            cloneContainer.appendChild(clone);
+
+            const pdfOptions = {
+                margin: 0.2,
+                filename: filename,
+                image: { type: 'png', quality: 1.0 },
+                html2canvas: { scale: 2, useCORS: true, letterRendering: true, scrollY: 0 },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+
+            try {
+                if (outputType === 'blob') {
+                    return await html2pdf().set(pdfOptions).from(clone).output('blob');
+                } else {
+                    await html2pdf().set(pdfOptions).from(clone).save();
+                }
+            } finally {
+                cloneContainer.innerHTML = '';
+            }
+        }
+
+        document.getElementById('excel-file-input').addEventListener('change', handleFile);
+        
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                generateContent(jsonData);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function generateContent(data) {
+            employeeDataStore = data;
+            document.getElementById('payslips-output-container').innerHTML = '';
+            const processingContainer = document.getElementById('processing-container');
+            const rangeSection = document.getElementById('range-download-section');
+            
+            if (data && data.length > 0) {
+                generatePayslips(data);
+                generateProcessingList(data);
+                processingContainer.style.display = 'block';
+                rangeSection.style.display = 'flex';
+            } else {
+                processingContainer.style.display = 'none';
+                rangeSection.style.display = 'none';
+            }
+        }
+        
+        // --- UPDATED: Generate payslips with dynamic header ---
+        function generatePayslips(data) {
+            const template = document.getElementById('payslip-template').content;
+            const outputContainer = document.getElementById('payslips-output-container');
+            outputContainer.innerHTML = '';
+
+            // Get selected period ONCE before the loop
+            const monthName = monthSelect.options[monthSelect.selectedIndex].text;
+            const year = yearSelect.value;
+            const periodText = `Payslip ${monthName} - ${year}`;
+
+            data.forEach((employee, index) => {
+                const payslipNode = document.importNode(template, true);
+
+                // Set dynamic header
+                payslipNode.querySelector('.data-payslip-period').textContent = periodText;
+
+                const payslipWrapper = payslipNode.querySelector('.payslip-wrapper');
+                payslipWrapper.setAttribute('data-employee-index', index);
+                const formatCurrency = (num) => (num && !isNaN(num)) ? Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+                const formatString = (str) => str || '';
+                const formatNumber = (num) => (num && !isNaN(num)) ? Number(num).toLocaleString('en-US') : '0';
+                const formatPercentage = (val) => { if (val === null || val === undefined || val === '') return '0.00%'; const num = parseFloat(val); if (isNaN(num)) return val.toString(); return `${(num * 100).toFixed(2)}%`; };
+                const setContent = (selector, value, formatter = formatString) => { const elements = payslipNode.querySelectorAll(selector); elements.forEach(element => { if (element) { element.textContent = formatter(value); } }); };
+                setContent('.data-employee-name', employee['Employee Name']); setContent('.data-designation', employee['Designation']); setContent('.data-department', employee['Department']); setContent('.data-working-days', employee['Att']); setContent('.data-sales-target', employee['Sales Target'], formatCurrency); setContent('.data-actual-sales', employee['Actual Sales'], formatCurrency); setContent('.data-sales-tf', employee['Sales TF %'], formatPercentage); setContent('.data-collection-target-360', employee['Collection Target <=360 DAYS'], formatCurrency); setContent('.data-actual-collection-360', employee['Actual Collection <=360 DAYS'], formatCurrency); setContent('.data-collection-tf-perc', employee['Collection TF %'], formatPercentage); setContent('.data-total-actual-collection', employee['Total Actual Collection'], formatCurrency); setContent('.data-total-collection-tf-perc', employee['Total Collection TF %'], formatPercentage); setContent('.data-total-collection-target', employee['Total Collection Target'], formatCurrency); setContent('.data-t-collection-tf-perc', employee['T. Collection TF%'], formatPercentage); setContent('.data-number-of-lines', employee['Number of lines']); setContent('.data-target-mbc', employee['Target MBC'], formatNumber); setContent('.data-actual-mbc', employee['Actual MBC'], formatNumber); setContent('.data-mbc-tf-perc', employee['MBC TF %'], formatPercentage); setContent('.data-target-cb', employee['Target CB'], formatNumber); setContent('.data-actual-cb', employee['Actual CB'], formatNumber); setContent('.data-cb-tf-perc', employee['CB TF %'], formatPercentage); setContent('.data-target-gp', employee['Target GP'], formatPercentage); setContent('.data-actual-gp', employee['Actual GP'], formatPercentage); setContent('.data-credit-note', employee['Credit Note'], formatNumber); setContent('.data-sales-commission-perc', employee['Sales Commission %']); setContent('.data-sales-bonus', employee['Sales Bonus'], formatCurrency); setContent('.data-customer-mgt-bonus', employee['Customer_Management_Bonus'], formatCurrency); setContent('.data-collection-tf-bonus', employee['Collection_TF_Bonus'], formatCurrency); setContent('.data-lines-incentive', employee['Incentive'], formatCurrency); setContent('.data-total-monthly-variable', employee['Total Monthly Variable'], formatCurrency); setContent('.data-basic-salary', employee['Basic Salary'], formatCurrency); setContent('.data-housing-allowance', employee['Housing Allowance'], formatCurrency); setContent('.data-transportation-allowance', employee['Transportation Allowance'], formatCurrency); setContent('.data-other-allowance', employee['Other'], formatCurrency); setContent('.data-seniority-bonus', employee['Sales_Level_Bonus'], formatCurrency); setContent('.data-additional-work-allowance', employee['Additional Work Allowance'], formatCurrency); setContent('.data-compensations', employee['Compensations'], formatCurrency); setContent('.data-variable-income-structure', employee['Special_Income_Structure'], formatCurrency); setContent('.data-special-bonus', employee['Special_BonusTL_Bonus'], formatCurrency); setContent('.data-income-adjustment', employee['Income Adjustment'], formatCurrency); setContent('.data-referral-bonus', employee['Referral Bonus'], formatCurrency); setContent('.data-total-wage', employee['Total wage'], formatCurrency); setContent('.data-family-insurance', employee['Family_Insurance'], formatCurrency); setContent('.data-leaves-deductions', employee['Deduc_Attend'], formatCurrency); setContent('.data-violation-co', employee['Violations_Customers'], formatCurrency); setContent('.data-violation-petrol', employee['Violations_Petrol_Excess'], formatCurrency); setContent('.data-violation-traffic', employee['Violations - Traffic fines / Salik / Damages to Vehicle'], formatCurrency); setContent('.data-other-violations', employee['Other_Deduction'], formatCurrency); setContent('.data-legal-debts', employee['Legal_Debts_Visa'], formatCurrency); setContent('.data-other-deduction', employee['Other_Deduction'], formatCurrency); setContent('.data-personal-loans', employee['Personal_Loans__Advances'], formatCurrency); setContent('.data-etisalat-excess', employee['Etisalat_Excess'], formatCurrency); setContent('.data-redemption-entitlements', employee['Redemption on Entitlements'], formatCurrency); setContent('.data-redemption-commission', employee['Redemption_on_Bonus'], formatCurrency); setContent('.data-total-deductions', employee['Total Deductions and Redemptions'], formatCurrency); setContent('.data-net-income', `${formatCurrency(employee['Net Income'])} AED`);
+                const payslipElement = payslipNode.querySelector('.payslip-container');
+                const pdfButton = payslipNode.querySelector('.pdf-btn');
+                const employeeName = employee['Employee Name'] || 'Payslip';
+                const pdfFilename = `${employeeName.replace(/[\s\/]/g, '-')}.pdf`;
+                pdfButton.addEventListener('click', () => { generatePdfForElement(payslipElement, { filename: pdfFilename }); });
+                outputContainer.appendChild(payslipNode);
+            });
+        }
+        
+        function updateStatus(index, text, className) {
+            const statusCell = document.querySelector(`#processing-list-body tr:nth-child(${index + 1}) .status-cell`);
+            if (statusCell) {
+                statusCell.textContent = text;
+                statusCell.className = `status-cell ${className}`;
+            }
+        }
+
+        // Processing list generation (unchanged)
+        function generateProcessingList(data) {
+            const listBody = document.getElementById('processing-list-body');
+            listBody.innerHTML = '';
+            data.forEach((employee, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${index + 1}</td><td>${employee['Employee Name'] || 'N/A'}</td><td class="status-cell status-pending">Pending</td><td><button class="btn-process-download" data-employee-index="${index}"><i class="fas fa-download"></i> Download</button></td>`;
+                listBody.appendChild(row);
+            });
+        }
+        
+        // Individual download button listener (unchanged)
+        document.getElementById('processing-list-body')?.addEventListener('click', (event) => {
+            const button = event.target.closest('.btn-process-download');
+            if (!button) return;
+            const employeeIndex = parseInt(button.dataset.employeeIndex, 10);
+            if (isNaN(employeeIndex)) return;
+            const employee = employeeDataStore[employeeIndex];
+            const payslipElement = document.querySelector(`.payslip-wrapper[data-employee-index="${employeeIndex}"] .payslip-container`);
+            if (employee && payslipElement) {
+                const employeeName = employee['Employee Name'] || `Employee-${employeeIndex + 1}`;
+                const pdfFilename = `${employeeName.replace(/[\s\/]/g, '-')}.pdf`;
+                generatePdfForElement(payslipElement, { filename: pdfFilename });
+            } else {
+                console.error(`Could not find payslip for index: ${employeeIndex}`);
+                alert('Could not generate PDF. Payslip data not found.');
+            }
+        });
+        
+        // --- UPDATED: Batch download with dynamic ZIP filename ---
+        async function downloadPayslipsWithQueue(button, startIndex, endIndex) {
+            const originalHTML = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            const CONCURRENCY_LIMIT = 4;
+            const tasks = [];
+            for (let i = startIndex; i < endIndex; i++) {
+                tasks.push(i);
+                updateStatus(i, 'Queued', 'status-pending');
+            }
+            const pdfs = [];
+            const worker = async () => {
+                while (tasks.length > 0) {
+                    const i = tasks.shift();
+                    if (i === undefined) continue;
+                    updateStatus(i, 'Generating...', 'status-generating');
+                    const employee = employeeDataStore[i];
+                    const payslipElement = document.querySelector(`.payslip-wrapper[data-employee-index="${i}"] .payslip-container`);
+                    const employeeName = employee['Employee Name'] || `Employee-${i + 1}`;
+                    const pdfFilename = `${employeeName.replace(/[\s\/]/g, '-')}.pdf`;
+                    try {
+                        const blob = await generatePdfForElement(payslipElement, { outputType: 'blob', filename: pdfFilename });
+                        pdfs.push({ filename: pdfFilename, blob });
+                        updateStatus(i, 'Done', 'status-done');
+                    } catch (err) {
+                        console.error(`Failed to generate PDF for ${employeeName}:`, err);
+                        updateStatus(i, 'Error', 'status-error');
+                    }
+                }
+            };
+            const workerPromises = [];
+            for (let i = 0; i < CONCURRENCY_LIMIT; i++) {
+                workerPromises.push(worker());
+            }
+            await Promise.all(workerPromises);
+            try {
+                button.innerHTML = '<i class="fas fa-cog fa-spin"></i> Creating ZIP...';
+                const zip = new JSZip();
+                pdfs.forEach(pdf => {
+                    if (pdf) zip.file(pdf.filename, pdf.blob);
+                });
+                const content = await zip.generateAsync({ type: "blob" });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+
+                // Create dynamic filename
+                const monthName = monthSelect.options[monthSelect.selectedIndex].text;
+                const year = yearSelect.value;
+                const isFullDownload = (endIndex - startIndex) === employeeDataStore.length;
+                link.download = isFullDownload 
+                    ? `All-Payslips-${monthName}-${year}.zip`
+                    : `Payslips_Batch_${startIndex + 1}-${endIndex}_${monthName}-${year}.zip`;
+
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                console.error("Error creating ZIP file:", error);
+                alert("An error occurred while creating the ZIP file. See console for details.");
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalHTML;
+            }
+        }
+
+        document.getElementById('download-all-zip-btn').addEventListener('click', function() {
+            if (employeeDataStore.length === 0) {
+                alert('No employee data loaded yet. Please select an Excel file first.');
+                return;
+            }
+            downloadPayslipsWithQueue(this, 0, employeeDataStore.length);
+        });
+
+        document.getElementById('download-range-btn').addEventListener('click', function() {
+            if (employeeDataStore.length === 0) {
+                alert('No employee data loaded yet. Please select an Excel file first.');
+                return;
+            }
+            const fromInput = document.getElementById('range-from');
+            const toInput = document.getElementById('range-to');
+            const from = parseInt(fromInput.value, 10);
+            const to = parseInt(toInput.value, 10);
+            const max = employeeDataStore.length;
+            if (isNaN(from) || isNaN(to) || from < 1 || to < from || to > max) {
+                alert(`Invalid range. Please enter numbers between 1 and ${max}, where 'From' is less than or equal to 'To'.`);
+                return;
+            }
+            downloadPayslipsWithQueue(this, from - 1, to);
+        });
+
+        // --- NEW: Event listener to refresh payslips when period changes ---
+        function refreshOnPeriodChange() {
+            if (employeeDataStore.length > 0) {
+                generatePayslips(employeeDataStore);
+                // No need to regenerate the processing list as it's static
+            }
+        }
+        monthSelect.addEventListener('change', refreshOnPeriodChange);
+        yearSelect.addEventListener('change', refreshOnPeriodChange);
+
+    </script>
+</body>
+</html>
