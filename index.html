@@ -259,10 +259,15 @@
                 const formatNumber = (num) => (num && !isNaN(num)) ? Number(num).toLocaleString('en-US') : '0';
                 const formatPercentage = (val) => { if (val === null || val === undefined || val === '') return '0.00%'; const num = parseFloat(val); if (isNaN(num)) return val.toString(); return `${(num * 100).toFixed(2)}%`; };
                 const setContent = (selector, value, formatter = formatString) => { const elements = payslipNode.querySelectorAll(selector); elements.forEach(element => { if (element) { element.textContent = formatter(value); } }); };
+
+                // --- COMPLETE Data Mapping ---
+                // Employee Details
                 setContent('.data-employee-name', employee['Employee Name']); 
                 setContent('.data-designation', employee['Designation']); 
                 setContent('.data-department', employee['Department']); 
                 setContent('.data-working-days', employee['Att']); 
+
+                // Individual Performance
                 setContent('.data-sales-target', employee['Sales Target'], formatCurrency); 
                 setContent('.data-actual-sales', employee['Actual Sales'], formatCurrency); 
                 setContent('.data-sales-tf', employee['Sales TF %'], formatPercentage); 
@@ -283,12 +288,16 @@
                 setContent('.data-target-gp', employee['Target GP'], formatPercentage); 
                 setContent('.data-actual-gp', employee['Actual GP'], formatPercentage); 
                 setContent('.data-credit-note', employee['Credit Note'], formatNumber); 
+
+                // Variable Income / KPI
                 setContent('.data-sales-commission-perc', employee['Sales Commission %']); 
                 setContent('.data-sales-bonus', employee['Sales Bonus'], formatCurrency); 
                 setContent('.data-customer-mgt-bonus', employee['Customer_Management_Bonus'], formatCurrency); 
                 setContent('.data-collection-tf-bonus', employee['Collection_TF_Bonus'], formatCurrency); 
                 setContent('.data-lines-incentive', employee['Incentive'], formatCurrency); 
                 setContent('.data-total-monthly-variable', employee['Total Monthly Variable'], formatCurrency); 
+
+                // Earnings
                 setContent('.data-basic-salary', employee['Basic Salary'], formatCurrency); 
                 setContent('.data-housing-allowance', employee['Housing Allowance'], formatCurrency); 
                 setContent('.data-transportation-allowance', employee['Transportation Allowance'], formatCurrency); 
@@ -301,6 +310,8 @@
                 setContent('.data-income-adjustment', employee['Income Adjustment'], formatCurrency); 
                 setContent('.data-referral-bonus', employee['Referral Bonus'], formatCurrency); 
                 setContent('.data-total-wage', employee['Total wage'], formatCurrency); 
+
+                // Deductions
                 setContent('.data-family-insurance', employee['Family_Insurance'], formatCurrency); 
                 setContent('.data-leaves-deductions', employee['Deduc_Attend'], formatCurrency); 
                 setContent('.data-violation-co', employee['Violations_Customers'], formatCurrency); 
@@ -314,6 +325,8 @@
                 setContent('.data-redemption-entitlements', employee['Redemption on Entitlements'], formatCurrency); 
                 setContent('.data-redemption-commission', employee['Redemption_on_Bonus'], formatCurrency); 
                 setContent('.data-total-deductions', employee['Total Deductions and Redemptions'], formatCurrency); 
+
+                // Final Net
                 setContent('.data-net-income', `${formatCurrency(employee['Net Income'])} AED`);
                 const payslipElement = payslipNode.querySelector('.payslip-container');
                 const pdfButton = payslipNode.querySelector('.pdf-btn');
